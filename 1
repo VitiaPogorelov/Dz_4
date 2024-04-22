@@ -1,0 +1,68 @@
+#include <iostream>
+#include <vector>
+#include <thread>
+#include <mutex>
+#include <algorithm>
+#include <random>
+
+std::mutex mutex_lock;
+std::vector<int> largest_nums;
+
+void find_largest_nums(const std::vector<int>& nums, int start, int end) {
+    std::vector<int> local_largest(3, INT_MIN); // Локальный список для хранения трех максимальных чисел
+
+    for (int i = start; i < end; ++i) {
+        if (nums[i] > local_largest[0]) {
+            local_largest[2] = local_largest[1];
+            local_largest[1] = local_largest[0];
+            local_largest[0] = nums[i];
+        } else if (nums[i] > local_largest[1]) {
+            local_largest[2] = local_largest[1];
+            local_largest[1] = nums[i];
+        } else if (nums[i] > local_largest[2]) {
+            local_largest[2] = nums[i];
+        }
+    }
+
+    std::lock_guard<std::mutex> guard(mutex_lock);
+    for (auto& num : local_largest) {
+        largest_nums.push_back(num);
+    }
+}
+
+int main() {
+    const int N = 10000; // Размер массива
+    std::vector<int> nums(N);
+
+    // Заполнение массива случайными числами
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distrib(1, 1000000);
+
+    for (int& num : nums) {
+        num = distrib(gen);
+    }
+
+    int num_threads = 4; // Количество потоков
+    std::vector<std::thread> threads;
+
+  
+    for (int i = 0; i < num_threads; ++i) {
+        int start = i * (N / num_threads);
+        int end = (i + 1) * (N / num_threads);
+        threads.emplace_back(find_largest_nums, std::ref(nums), start, end);
+    }
+
+  
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    // Сортировка всех найденных максимальных чисел и выбор трех самых больших
+    std::sort(largest_nums.begin(), largest_nums.end(), std::greater<int>());
+    int sum_of_top_three = largest_nums[0] + largest_nums[1] + largest_nums[2];
+
+    std::cout << "Сумма трех самых больших элементов: " << sum_of_top_three << std::endl;
+
+    return 0;
+}
